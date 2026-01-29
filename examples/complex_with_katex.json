@@ -1,0 +1,122 @@
+{
+    "class": "Радиолюбителски клас 2",
+    "section": "Раздел 1 – Електротехника и радиотехника",
+    "update": "Актуализиран конспект 11.08.2025 г.",
+    "questions": [
+        {
+            "question_number": 1,
+            "question_body": "Каква е стойността на времеконстантата $\\tau$ на една RC група?",
+            "correct_answer": "А",
+            "choices": [
+                {
+                    "key": "А",
+                    "text": "$\\tau = RC$"
+                },
+                {
+                    "key": "Б",
+                    "text": "$\\tau = \\dfrac{R}{C}$"
+                },
+                {
+                    "key": "В",
+                    "text": "$\\tau = \\dfrac{C}{R}$"
+                },
+                {
+                    "key": "Г",
+                    "text": "$\\tau = \\dfrac{1}{RC}$"
+                }
+            ]
+        },
+        {
+            "question_number": 2,
+            "question_body": "Антена с дължина $\\dfrac{5}{8}\\lambda$ вместо четвъртвълнова има съпротивление:",
+            "correct_answer": "В",
+            "choices": [
+                {
+                    "key": "А",
+                    "text": "50 ома"
+                },
+                {
+                    "key": "Б",
+                    "text": "75 ома"
+                },
+                {
+                    "key": "В",
+                    "text": "$\\dfrac{1}{30}$ ома"
+                },
+                {
+                    "key": "Г",
+                    "text": "300 ома"
+                }
+            ]
+        },
+        {
+            "question_number": 3,
+            "question_body": "Параметърът $\\beta$ (бета) на биполярния транзистор се нарича:",
+            "correct_answer": "Б",
+            "choices": [
+                {
+                    "key": "А",
+                    "text": "Алфа ($\\alpha$)"
+                },
+                {
+                    "key": "Б",
+                    "text": "Коефициент на усилване по ток"
+                },
+                {
+                    "key": "В",
+                    "text": "Гама ($\\gamma$)"
+                },
+                {
+                    "key": "Г",
+                    "text": "Делта ($\\delta$)"
+                }
+            ]
+        },
+        {
+            "question_number": 4,
+            "question_body": "Резонансната честота на LC контур се изчислява по формулата:",
+            "correct_answer": "А",
+            "choices": [
+                {
+                    "key": "А",
+                    "text": "$f = \\dfrac{1}{2\\pi\\sqrt{LC}}$"
+                },
+                {
+                    "key": "Б",
+                    "text": "$f = 2\\pi\\sqrt{LC}$"
+                },
+                {
+                    "key": "В",
+                    "text": "$f = \\dfrac{\\sqrt{LC}}{2\\pi}$"
+                },
+                {
+                    "key": "Г",
+                    "text": "$f = \\dfrac{2\\pi}{\\sqrt{LC}}$"
+                }
+            ]
+        },
+        {
+            "question_number": 5,
+            "question_body": "Кондензатор с капацитет 100 µF се свързва последователно с кондензатор 50 µF. Обща капацитет е:",
+            "correct_answer": "В",
+            "choices": [
+                {
+                    "key": "А",
+                    "text": "150 µF"
+                },
+                {
+                    "key": "Б",
+                    "text": "50 µF"
+                },
+                {
+                    "key": "В",
+                    "text": "33,3 µF"
+                },
+                {
+                    "key": "Г",
+                    "text": "200 µF"
+                }
+            ]
+        }
+    ]
+}
