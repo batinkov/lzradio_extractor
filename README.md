@@ -204,5 +204,7 @@ This is a manual extraction workflow with human-in-the-loop validation. The proc
 
 ## License
 
-[Add your license here]
+The code and documentation in this repository are licensed under the [MIT License](LICENSE).
+
+The PDF files in `source_pdfs/` are official documents published by the Bulgarian Communications Regulation Commission (CRC / КРС) at [crc.bg](https://crc.bg/bg/rubriki/143/testove-za-provejdane-na-izpiti-za-pravosposobnost-na-radiolubiteli). They are included unmodified for reference and are not covered by the MIT License.
 
