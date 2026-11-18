@@ -1,0 +1,5 @@
+downloads/
+extracted_json/
+__pycache__/
+*.pyc
+.claude/settings.local.json

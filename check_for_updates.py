@@ -1,223 +1,216 @@
 #!/usr/bin/env python3
 """
-Check for updates to CRC PDF files
+Check the CRC website for updated amateur radio exam PDFs.
 
-Downloads official PDF files from CRC website and compares them with local copies
-to detect when new versions are available.
+CRC renames its PDF files from time to time, so file URLs are not hardcoded.
+Instead the script starts at the CRC index page, follows the links to the
+class pages ("Радиолюбителски клас 1/2") and identifies each PDF by its link
+text ("Раздел N"). Every PDF is downloaded to downloads/ and compared by
+SHA256 with the local copy in source_pdfs/class_X_razdel_Y.pdf.
+
+Exit codes:
+    0  all files up to date
+    1  at least one file differs from (or is missing in) source_pdfs/
+    2  the check could not be completed (network error, site layout changed, ...)
 """
 
 import hashlib
+import os
+import re
 import sys
+import traceback
+from html.parser import HTMLParser
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin, urlparse
+from urllib.request import Request, urlopen
+
+INDEX_URL = (
+    "https://crc.bg/bg/rubriki/143/"
+    "testove-za-provejdane-na-izpiti-za-pravosposobnost-na-radiolubiteli"
+)
+USER_AGENT = "lzradio-extractor (CRC exam PDF update check)"
+TIMEOUT = 30
+
+CLASSES = (1, 2)
+SECTIONS = (1, 2, 3)
+
+ROOT = Path(__file__).resolve().parent
+SOURCE_DIR = ROOT / "source_pdfs"
+DOWNLOAD_DIR = ROOT / "downloads"
+
+EXIT_UP_TO_DATE = 0
+EXIT_UPDATED = 1
+EXIT_ERROR = 2
+
+
+def _use_color() -> bool:
+    return sys.stdout.isatty() and "NO_COLOR" not in os.environ
 
 
 class Colors:
-    """ANSI color codes for terminal output"""
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    GREEN = '\033[92m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
+    """ANSI color codes; empty when output is not a terminal or NO_COLOR is set."""
+    _on = _use_color()
+    RED = '\033[91m' if _on else ''
+    YELLOW = '\033[93m' if _on else ''
+    GREEN = '\033[92m' if _on else ''
+    BOLD = '\033[1m' if _on else ''
+    RESET = '\033[0m' if _on else ''
 
 
-def calculate_sha256(filepath: Path) -> str:
-    """Calculate SHA256 hash of a file"""
-    sha256_hash = hashlib.sha256()
+class CheckError(Exception):
+    """The check could not be completed."""
+
+
+class LinkParser(HTMLParser):
+    """Collects (href, text, title) for every <a> element."""
+
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._current = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'a':
+            attrs = dict(attrs)
+            self._current = {'href': attrs.get('href') or '',
+                             'title': attrs.get('title') or '', 'text': []}
+
+    def handle_data(self, data):
+        if self._current is not None:
+            self._current['text'].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'a' and self._current is not None:
+            text = ' '.join(''.join(self._current['text']).split())
+            self.links.append((self._current['href'], text, self._current['title']))
+            self._current = None
+
+
+def fetch(url: str) -> bytes:
+    req = Request(url, headers={'User-Agent': USER_AGENT})
     try:
-        with open(filepath, "rb") as f:
-            # Read in chunks to handle large files
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-    except FileNotFoundError:
-        return None
-    except Exception as e:
-        print(f"  {Colors.RED}Error calculating hash: {e}{Colors.RESET}")
-        return None
-
-
-def download_file(url: str, destination: Path) -> bool:
-    """Download a file from URL to destination path"""
-    try:
-        # Add user agent to avoid potential blocks
-        req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-
-        with urlopen(req, timeout=30) as response:
-            content = response.read()
-
-        # Write to file
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with open(destination, 'wb') as f:
-            f.write(content)
-
-        return True
-
+        with urlopen(req, timeout=TIMEOUT) as response:
+            return response.read()
     except HTTPError as e:
-        print(f"  {Colors.RED}HTTP Error {e.code}: {e.reason}{Colors.RESET}")
-        return False
-    except URLError as e:
-        print(f"  {Colors.RED}URL Error: {e.reason}{Colors.RESET}")
-        return False
-    except TimeoutError:
-        print(f"  {Colors.RED}Timeout: Server did not respond{Colors.RESET}")
-        return False
-    except Exception as e:
-        print(f"  {Colors.RED}Error: {e}{Colors.RESET}")
-        return False
+        raise CheckError(f"HTTP {e.code} {e.reason}: {url}") from e
+    except (URLError, TimeoutError, OSError) as e:
+        reason = getattr(e, 'reason', e)
+        raise CheckError(f"Cannot fetch {url}: {reason}") from e
 
 
-def check_updates():
-    """Check for updates to CRC PDF files"""
+def get_links(url: str):
+    """Return absolute (href, label) pairs for all links on a page."""
+    parser = LinkParser()
+    parser.feed(fetch(url).decode('utf-8', errors='replace'))
+    return [(urljoin(url, href), f"{text} {title}")
+            for href, text, title in parser.links if href]
 
-    # Base URL for CRC files
-    BASE_URL = "https://crc.bg/files/URChS/Radioamateur"
 
-    # Files to check
-    files = [
-        "class_1_razdel_1.pdf",
-        "class_1_razdel_2.pdf",
-        "class_1_razdel_3.pdf",
-        "class_2_razdel_1.pdf",
-        "class_2_razdel_2.pdf",
-        "class_2_razdel_3.pdf",
-    ]
+def find_class_pages() -> dict:
+    """Map class number -> URL of its page, found via the index page."""
+    pages = {}
+    for href, label in get_links(INDEX_URL):
+        m = re.search(r'клас\s*([12])\b', label, re.IGNORECASE)
+        if m and '/rubriki/' in href:
+            pages.setdefault(int(m.group(1)), href)
+    missing = [c for c in CLASSES if c not in pages]
+    if missing:
+        raise CheckError(
+            f"Class page(s) {missing} not found on {INDEX_URL} - did the site layout change?")
+    return pages
 
-    # Directories
-    aux_dir = Path("aux")
-    source_dir = Path("source_pdfs")
 
-    # Create aux directory if it doesn't exist
-    aux_dir.mkdir(exist_ok=True)
+def find_section_pdfs(class_url: str) -> dict:
+    """Map section number -> PDF URL, found via the link text on a class page."""
+    pdfs = {}
+    for href, label in get_links(class_url):
+        if not urlparse(href).path.lower().endswith('.pdf'):
+            continue
+        m = re.search(r'Раздел\s*(\d+)', label, re.IGNORECASE)
+        if not m:
+            continue
+        section = int(m.group(1))
+        if section in pdfs and pdfs[section] != href:
+            raise CheckError(f"Several PDFs for section {section} on {class_url}")
+        pdfs[section] = href
+    if sorted(pdfs) != list(SECTIONS):
+        raise CheckError(
+            f"Expected PDFs for sections {list(SECTIONS)} on {class_url}, "
+            f"found {sorted(pdfs)} - did the site layout change?")
+    return pdfs
 
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def check_updates() -> int:
     print(f"\n{Colors.BOLD}Checking for updates to CRC PDF files{Colors.RESET}")
     print("=" * 70)
-    print(f"Source: {BASE_URL}")
-    print(f"Local:  {source_dir}/")
+    print(f"Index:  {INDEX_URL}")
+    print(f"Local:  {SOURCE_DIR.relative_to(ROOT)}/")
     print()
 
-    # Track results
-    results = {
-        'identical': [],
-        'updated': [],
-        'download_failed': [],
-        'missing_local': [],
-    }
+    remote = {}  # local filename -> PDF URL
+    for cls, class_url in sorted(find_class_pages().items()):
+        for section, pdf_url in sorted(find_section_pdfs(class_url).items()):
+            remote[f"class_{cls}_razdel_{section}.pdf"] = pdf_url
 
-    # Check each file
-    for filename in files:
-        print(f"{Colors.BOLD}{filename}{Colors.RESET}")
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    identical, updated, missing = [], [], []
 
-        # Construct URL
-        url = f"{BASE_URL}/{filename}"
+    for name, url in remote.items():
+        print(f"{Colors.BOLD}{name}{Colors.RESET}")
+        print(f"  {url}")
+        data = fetch(url)
+        if not data.startswith(b'%PDF'):
+            raise CheckError(f"{url} is not a PDF")
+        (DOWNLOAD_DIR / name).write_bytes(data)
+        remote_hash = sha256(data)
 
-        # Paths
-        aux_file = aux_dir / filename
-        source_file = source_dir / filename
-
-        # Download file
-        print(f"  Downloading from {url}...")
-        if not download_file(url, aux_file):
-            results['download_failed'].append(filename)
-            print()
-            continue
-
-        print(f"  {Colors.GREEN}✓ Downloaded{Colors.RESET}")
-
-        # Calculate hash of downloaded file
-        aux_hash = calculate_sha256(aux_file)
-        if not aux_hash:
-            results['download_failed'].append(filename)
-            print()
-            continue
-
-        # Check if source file exists
-        if not source_file.exists():
-            print(f"  {Colors.YELLOW}⚠ File not found in {source_dir}/{Colors.RESET}")
-            results['missing_local'].append(filename)
-            print()
-            continue
-
-        # Calculate hash of source file
-        source_hash = calculate_sha256(source_file)
-        if not source_hash:
-            results['download_failed'].append(filename)
-            print()
-            continue
-
-        # Compare hashes
-        if aux_hash == source_hash:
-            print(f"  {Colors.GREEN}✓ Files match (SHA256: {aux_hash[:16]}...){Colors.RESET}")
-            results['identical'].append(filename)
+        local = SOURCE_DIR / name
+        if not local.exists():
+            print(f"  {Colors.YELLOW}⚠ Not found locally{Colors.RESET}")
+            missing.append(name)
+        elif sha256(local.read_bytes()) == remote_hash:
+            print(f"  {Colors.GREEN}✓ Up to date (SHA256: {remote_hash[:16]}...){Colors.RESET}")
+            identical.append(name)
         else:
-            print(f"  {Colors.YELLOW}⚠ FILES DIFFER - Update available!{Colors.RESET}")
-            print(f"    Downloaded: {aux_hash[:16]}...")
-            print(f"    Local:      {source_hash[:16]}...")
-            results['updated'].append(filename)
-
+            print(f"  {Colors.YELLOW}⚠ Differs from local copy - update available{Colors.RESET}")
+            updated.append(name)
         print()
 
-    # Print summary
     print("=" * 70)
-    print(f"{Colors.BOLD}SUMMARY{Colors.RESET}")
-    print()
+    if updated or missing:
+        print(f"{Colors.YELLOW}{Colors.BOLD}⚠️  UPDATES AVAILABLE{Colors.RESET}")
+        for name in updated:
+            print(f"  • {name} (changed)")
+        for name in missing:
+            print(f"  • {name} (missing locally)")
+        print(f"\nNew versions saved in {DOWNLOAD_DIR.relative_to(ROOT)}/")
+        return EXIT_UPDATED
 
-    if results['identical']:
-        print(f"{Colors.GREEN}✓ Up to date ({len(results['identical'])} files):{Colors.RESET}")
-        for f in results['identical']:
-            print(f"  • {f}")
-        print()
-
-    if results['updated']:
-        print(f"{Colors.YELLOW}⚠ Updates available ({len(results['updated'])} files):{Colors.RESET}")
-        for f in results['updated']:
-            print(f"  • {f}")
-        print()
-
-    if results['missing_local']:
-        print(f"{Colors.YELLOW}⚠ Missing from {source_dir}/ ({len(results['missing_local'])} files):{Colors.RESET}")
-        for f in results['missing_local']:
-            print(f"  • {f}")
-        print()
-
-    if results['download_failed']:
-        print(f"{Colors.RED}✗ Download failed ({len(results['download_failed'])} files):{Colors.RESET}")
-        for f in results['download_failed']:
-            print(f"  • {f}")
-        print()
-
-    # Overall status
-    total = len(files)
-    if results['updated'] or results['missing_local'] or results['download_failed']:
-        if results['updated']:
-            print(f"{Colors.YELLOW}{Colors.BOLD}⚠️  UPDATES AVAILABLE{Colors.RESET}")
-            print(f"   {len(results['updated'])} file(s) have been updated on the CRC website")
-        else:
-            print(f"{Colors.YELLOW}{Colors.BOLD}⚠️  ISSUES DETECTED{Colors.RESET}")
-            print(f"   Check missing or failed downloads above")
-        return 1
-    else:
-        print(f"{Colors.GREEN}{Colors.BOLD}✅ ALL FILES UP TO DATE{Colors.RESET}")
-        print(f"   All {total} files match the CRC website")
-        return 0
+    print(f"{Colors.GREEN}{Colors.BOLD}✅ ALL FILES UP TO DATE{Colors.RESET}")
+    print(f"   All {len(identical)} files match the CRC website")
+    return EXIT_UP_TO_DATE
 
 
 def main():
-    """Main entry point"""
     try:
-        exit_code = check_updates()
-        sys.exit(exit_code)
+        sys.exit(check_updates())
+    except CheckError as e:
+        print(f"\n{Colors.RED}{Colors.BOLD}✗ CHECK FAILED:{Colors.RESET} {e}")
+        sys.exit(EXIT_ERROR)
     except KeyboardInterrupt:
-        print(f"\n\n{Colors.YELLOW}Interrupted by user{Colors.RESET}")
+        print(f"\n{Colors.YELLOW}Interrupted by user{Colors.RESET}")
         sys.exit(130)
-    except Exception as e:
-        print(f"\n{Colors.RED}{Colors.BOLD}Unexpected error:{Colors.RESET} {e}")
-        import traceback
+    except Exception:
+        # Unexpected bug: show the traceback, but never exit with 1
+        # (that would be reported as "update available").
+        print(f"\n{Colors.RED}{Colors.BOLD}✗ UNEXPECTED ERROR:{Colors.RESET}", flush=True)
         traceback.print_exc()
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
 
 if __name__ == '__main__':

@@ -25,7 +25,9 @@ Before extracting, check if CRC has published updated versions:
 python3 check_for_updates.py
 ```
 
-This downloads the latest PDFs from the CRC website and compares them with your local copies.
+This follows the links on the CRC exam page to find the current PDFs (CRC renames them from time to time), downloads them to `downloads/` and compares them with your local copies.
+
+Exit codes: `0` up to date, `1` update available, `2` check failed (network error or the CRC site layout changed).
 
 ### Extract Questions from PDF
 
@@ -61,7 +63,7 @@ lzradio_extractor/
 │   ├── class_1_razdel_2.pdf
 │   └── ...
 ├── extracted_json/           # Your extracted JSON files (temporary)
-├── aux/                      # Downloaded PDFs for comparison (gitignored)
+├── downloads/                # Downloaded PDFs for comparison (gitignored)
 ├── examples/                 # Reference examples
 │   ├── simple_no_math.json
 │   └── complex_with_katex.json
@@ -86,8 +88,9 @@ lzradio_extractor/
 ### Tools
 
 **`check_for_updates.py`**
-- Downloads latest PDFs from CRC website
-- Compares with local files using SHA256 hashes
+- Finds the current PDFs by following links from the CRC exam page (no hardcoded file URLs)
+- Downloads them to `downloads/` and compares with local files using SHA256 hashes
+- Exit codes: 0 up to date, 1 update available, 2 check failed
 - Reports which files have been updated
 
 **`validate.py`**

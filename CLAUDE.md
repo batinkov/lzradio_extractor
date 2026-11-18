@@ -28,7 +28,7 @@ lzradio_extractor/
 │   ├── class_1_razdel_2.pdf
 │   └── ...
 ├── extracted_json/           # Your extracted JSON files (temporary working directory)
-├── aux/                      # Downloaded PDFs for update checks (gitignored)
+├── downloads/                # Downloaded PDFs for update checks (gitignored)
 ├── examples/                 # Reference examples
 │   ├── simple_no_math.json   # Questions without mathematical content
 │   └── complex_with_katex.json  # Questions with KaTeX formatting
@@ -47,9 +47,13 @@ python3 check_for_updates.py
 ```
 
 This script will:
-1. Download all 6 PDF files from the CRC website to `aux/` directory
-2. Compare SHA256 hashes with your local files in `source_pdfs/`
-3. Report which files are up to date and which have been updated
+1. Open the CRC exam page (https://crc.bg/bg/rubriki/143/...) and follow the links to the Class 1 and Class 2 pages
+2. Identify each PDF by its link text ("Раздел N"), not by filename - CRC renames the files
+3. Download all 6 PDFs to `downloads/`, saved as `class_X_razdel_Y.pdf`
+4. Compare SHA256 hashes with your local files in `source_pdfs/`
+5. Report which files are up to date and which have been updated
+
+Exit codes: `0` up to date, `1` update available, `2` check failed (network error or site layout changed).
 
 **Example output when files match:**
 ```
@@ -60,10 +64,10 @@ This script will:
 **Example output when updates are available:**
 ```
 ⚠️  UPDATES AVAILABLE
-   1 file(s) have been updated on the CRC website
+  • class_2_razdel_3.pdf (changed)
 ```
 
-If updates are detected, manually review the changes in `aux/` and decide whether to copy them to `source_pdfs/` and re-extract the questions.
+If updates are detected, manually review the changes in `downloads/` and decide whether to copy them to `source_pdfs/` and re-extract the questions.
 
 ## Extraction Workflow
 
