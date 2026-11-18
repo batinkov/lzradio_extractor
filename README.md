@@ -69,6 +69,7 @@ lzradio_extractor/
 │   └── complex_with_katex.json
 ├── template.json             # JSON structure template
 ├── validate.py               # Validation script
+├── tests/                    # Unit tests (python3 -m unittest discover -s tests)
 ├── check_for_updates.py      # Check for PDF updates
 ├── CLAUDE.md                 # Detailed extraction guide (for LLMs)
 └── README.md                 # This file
@@ -183,6 +184,14 @@ Some questions show answer choices as diagrams, circuits, or symbols in images:
 ```
 
 The validator accepts empty choice text when an `image` field is present.
+
+## Running Tests
+
+The tests use only the Python standard library:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## Contributing
 

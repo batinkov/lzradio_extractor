@@ -34,6 +34,7 @@ lzradio_extractor/
 │   └── complex_with_katex.json  # Questions with KaTeX formatting
 ├── template.json             # JSON structure template with examples
 ├── validate.py               # Validation script for JSON files
+├── tests/                    # Unit tests (python3 -m unittest discover -s tests)
 ├── check_for_updates.py      # Check for PDF updates from CRC website
 └── CLAUDE.md                 # This file - formatting rules and workflow
 ```
@@ -167,18 +168,19 @@ The validator checks:
 ```
 Validating: Class2_Section1.json
 ======================================================================
-✓ Valid JSON syntax
 
 ⚠ WARNINGS (2):
   ⚠ Question 5 body: Found plain Unicode Greek letter 'λ'. Use KaTeX: $\lambda$
-  ⚠ Question 12, Choice 3: Found plain fraction '1/30'. Use KaTeX: $\dfrac{1}{30}$
+  ⚠ Question 12, Choice 3: Found formula division 'R/C'. Use KaTeX: $\dfrac{R}{C}$
+
+ℹ INFO:
+  ℹ ✓ Valid JSON syntax
 
 📊 STATISTICS:
   Total questions: 150
   Questions with math content: 45
   Questions with KaTeX: 43
   Plain Greek letters found: 1
-  Plain fractions found: 1
 
 ⚠️  VALIDATION PASSED WITH WARNINGS
    2 warning(s)
