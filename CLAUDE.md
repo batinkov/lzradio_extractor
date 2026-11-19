@@ -33,9 +33,12 @@ lzradio_extractor/
 │   ├── simple_no_math.json   # Questions without mathematical content
 │   └── complex_with_katex.json  # Questions with KaTeX formatting
 ├── template.json             # JSON structure template with examples
-├── validate.py               # Validation script for JSON files
-├── tests/                    # Unit tests (python3 -m unittest discover -s tests)
-├── check_for_updates.py      # Check for PDF updates from CRC website
+├── src/lzradio_extractor/
+│   ├── validate.py           # JSON validator (lzradio-validate)
+│   └── check_updates.py      # CRC update checker (lzradio-check-updates)
+├── tests/                    # pytest tests
+├── pyproject.toml            # Project metadata, dev dependencies, tool config
+├── uv.lock                   # Locked dev dependencies
 └── CLAUDE.md                 # This file - formatting rules and workflow
 ```
 
@@ -44,7 +47,7 @@ lzradio_extractor/
 Before extracting questions, you can check if the CRC has published updated versions of the PDF files:
 
 ```bash
-python3 check_for_updates.py
+uv run lzradio-check-updates
 ```
 
 This script will:
@@ -150,7 +153,7 @@ Example:
 After creating or modifying a JSON file, run the validation script:
 
 ```bash
-python validate.py your_file.json
+uv run lzradio-validate your_file.json
 ```
 
 The validator checks:

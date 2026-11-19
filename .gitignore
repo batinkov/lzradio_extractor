@@ -3,3 +3,8 @@ extracted_json/
 __pycache__/
 *.pyc
 .claude/settings.local.json
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/

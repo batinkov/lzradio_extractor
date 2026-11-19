@@ -5,7 +5,7 @@ JSON Question File Validator for Bulgarian Amateur Radio Exam Questions
 Validates structure, content, and KaTeX formatting of question JSON files.
 
 Usage:
-    python3 validate.py <json_file> [json_file ...]
+    lzradio-validate <json_file> [json_file ...]
 
 Exit codes:
     0  no errors (warnings are allowed)
@@ -18,7 +18,7 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def _use_color() -> bool:
@@ -27,6 +27,7 @@ def _use_color() -> bool:
 
 class Colors:
     """ANSI color codes; empty when output is not a terminal or NO_COLOR is set."""
+
     _on = _use_color()
     RED = '\033[91m' if _on else ''
     YELLOW = '\033[93m' if _on else ''
@@ -38,10 +39,11 @@ class Colors:
 
 class ValidationResult:
     """Stores validation results"""
+
     def __init__(self):
-        self.errors: List[str] = []
-        self.warnings: List[str] = []
-        self.info: List[str] = []
+        self.errors: list[str] = []
+        self.warnings: list[str] = []
+        self.info: list[str] = []
 
     def add_error(self, msg: str):
         self.errors.append(msg)
@@ -63,10 +65,23 @@ class QuestionValidator:
     # 'µ' (U+00B5 MICRO SIGN) and 'μ' (U+03BC GREEK SMALL LETTER MU) look the
     # same; both are allowed as a unit prefix (µF, µH, ...), nowhere else.
     GREEK_LETTERS = {
-        'α': 'alpha', 'β': 'beta', 'γ': 'gamma', 'δ': 'delta', 'Δ': 'Delta',
-        'ε': 'epsilon', 'η': 'eta', 'θ': 'theta', 'λ': 'lambda', 'μ': 'mu',
-        'µ': 'mu', 'π': 'pi', 'ρ': 'rho', 'σ': 'sigma', 'τ': 'tau',
-        'φ': 'phi', 'ω': 'omega',
+        'α': 'alpha',
+        'β': 'beta',
+        'γ': 'gamma',
+        'δ': 'delta',
+        'Δ': 'Delta',
+        'ε': 'epsilon',
+        'η': 'eta',
+        'θ': 'theta',
+        'λ': 'lambda',
+        'μ': 'mu',
+        'µ': 'mu',
+        'π': 'pi',
+        'ρ': 'rho',
+        'σ': 'sigma',
+        'τ': 'tau',
+        'φ': 'phi',
+        'ω': 'omega',
     }
     MICRO = ('µ', 'μ')
     # Ω is acceptable as Unicode (it is used in units: kΩ, MΩ)
@@ -78,8 +93,18 @@ class QuestionValidator:
     UNIT_DENOMINATORS = {'s', 'h', 'm', 'km', 'min', 'sec'}
 
     # LaTeX commands that must be written with a backslash inside $...$
-    LATEX_COMMANDS = ['lambda', 'tau', 'alpha', 'beta', 'gamma', 'delta',
-                      'dfrac', 'frac', 'sqrt', 'pi']
+    LATEX_COMMANDS = [
+        'lambda',
+        'tau',
+        'alpha',
+        'beta',
+        'gamma',
+        'delta',
+        'dfrac',
+        'frac',
+        'sqrt',
+        'pi',
+    ]
 
     IMAGE_NAME = re.compile(r'^Class[12]_Section[123]_(\d+)\.png$')
 
@@ -92,7 +117,7 @@ class QuestionValidator:
     QUESTION_OPTIONAL = {'image'}
     CHOICE_FIELDS = {'key', 'text'}
 
-    def __init__(self, filepath: Optional[str] = None, data: Any = None):
+    def __init__(self, filepath: str | None = None, data: Any = None):
         self.filepath = Path(filepath) if filepath else None
         self.data = data
         self.result = ValidationResult()
@@ -135,7 +160,7 @@ class QuestionValidator:
 
     def _load_json(self) -> bool:
         try:
-            with open(self.filepath, 'r', encoding='utf-8') as f:
+            with open(self.filepath, encoding='utf-8') as f:
                 self.data = json.load(f)
             self.result.add_info("✓ Valid JSON syntax")
             return True
@@ -198,10 +223,10 @@ class QuestionValidator:
                 self.result.add_error(f"{loc}: '{field}' must be a string, got {question[field]!r}")
                 ok = False
 
-        if 'image' in question:
-            if not isinstance(question['image'], str) or not question['image'].strip():
-                self.result.add_error(f"{loc}: 'image' must be a non-empty string")
-                ok = False
+        image = question.get('image')
+        if 'image' in question and (not isinstance(image, str) or not image.strip()):
+            self.result.add_error(f"{loc}: 'image' must be a non-empty string")
+            ok = False
 
         choices = question.get('choices')
         if 'choices' in question:
@@ -226,19 +251,20 @@ class QuestionValidator:
                     for field in self.CHOICE_FIELDS & set(choice):
                         if not isinstance(choice[field], str):
                             self.result.add_error(
-                                f"{c_loc}: '{field}' must be a string, got {choice[field]!r}")
+                                f"{c_loc}: '{field}' must be a string, got {choice[field]!r}"
+                            )
                             ok = False
         return ok
 
     # ------------------------------------------------------------------
     # Content
 
-    def _detect_keys(self, questions) -> List[str]:
+    def _detect_keys(self, questions) -> list[str]:
         """Use Latin keys only if the first question uses them; Cyrillic otherwise."""
         first_key = questions[0][1]['choices'][0]['key']
         return self.LATIN_KEYS if first_key in self.LATIN_KEYS else self.CYRILLIC_KEYS
 
-    def _validate_question_content(self, question: Dict, idx: int, expected_keys: List[str]):
+    def _validate_question_content(self, question: dict, idx: int, expected_keys: list[str]):
         loc = f"Question {idx}"
         has_image = 'image' in question
         if has_image:
@@ -249,14 +275,16 @@ class QuestionValidator:
             self.result.add_error(f"{loc}: Empty question_body")
         elif len(question['question_body']) > 500:
             self.result.add_warning(
-                f"{loc}: Very long question body ({len(question['question_body'])} chars)")
+                f"{loc}: Very long question body ({len(question['question_body'])} chars)"
+            )
 
         keys = [c['key'] for c in question['choices']]
         for c_idx, choice in enumerate(question['choices'], 1):
             if choice['key'] not in expected_keys:
                 self.result.add_error(
                     f"{loc}, Choice {c_idx}: Invalid key '{choice['key']}'. "
-                    f"Expected one of: {expected_keys}")
+                    f"Expected one of: {expected_keys}"
+                )
             if not choice['text'].strip() and not has_image:
                 self.result.add_error(f"{loc}, Choice {c_idx}: Empty text")
 
@@ -271,21 +299,25 @@ class QuestionValidator:
             self.result.add_error(f"{loc}: Empty correct_answer")
         elif correct not in expected_keys:
             self.result.add_error(
-                f"{loc}: Invalid correct_answer '{correct}'. Expected one of: {expected_keys}")
+                f"{loc}: Invalid correct_answer '{correct}'. Expected one of: {expected_keys}"
+            )
         elif correct not in keys:
             self.result.add_error(
-                f"{loc}: correct_answer '{correct}' not found in choice keys: {keys}")
+                f"{loc}: correct_answer '{correct}' not found in choice keys: {keys}"
+            )
 
-    def _validate_image_name(self, question: Dict, loc: str):
+    def _validate_image_name(self, question: dict, loc: str):
         image = question['image']
         m = self.IMAGE_NAME.match(image)
         if not m:
             self.result.add_warning(
-                f"{loc}: Image name '{image}' does not match 'Class<X>_Section<Y>_<N>.png'")
+                f"{loc}: Image name '{image}' does not match 'Class<X>_Section<Y>_<N>.png'"
+            )
         elif int(m.group(1)) != question['question_number']:
             self.result.add_warning(
                 f"{loc}: Image '{image}' does not match question_number "
-                f"{question['question_number']}")
+                f"{question['question_number']}"
+            )
 
     def _validate_numbering(self, questions):
         numbers = [q['question_number'] for _, q in questions]
@@ -299,15 +331,18 @@ class QuestionValidator:
             self.result.add_warning(f"Question numbers are not in sequential order. Got: {numbers}")
         else:
             self.result.add_warning(
-                f"Question numbers are not sequential. Expected 1-{len(numbers)}, got: {numbers}")
+                f"Question numbers are not sequential. Expected 1-{len(numbers)}, got: {numbers}"
+            )
 
     # ------------------------------------------------------------------
     # KaTeX
 
-    def _validate_question_katex(self, question: Dict, idx: int):
+    def _validate_question_katex(self, question: dict, idx: int):
         fields = [(f"Question {idx} body", question['question_body'])]
-        fields += [(f"Question {idx}, Choice {c_idx}", c['text'])
-                   for c_idx, c in enumerate(question['choices'], 1)]
+        fields += [
+            (f"Question {idx}, Choice {c_idx}", c['text'])
+            for c_idx, c in enumerate(question['choices'], 1)
+        ]
 
         has_math = has_katex = False
         for location, text in fields:
@@ -321,7 +356,7 @@ class QuestionValidator:
             self.stats['questions_with_math'] += 1
 
     @staticmethod
-    def _outside_math(text: str) -> List[str]:
+    def _outside_math(text: str) -> list[str]:
         """Parts of text that are not between $...$ delimiters."""
         return text.split('$')[::2]
 
@@ -339,12 +374,13 @@ class QuestionValidator:
             for i, ch in enumerate(part):
                 if ch not in self.GREEK_LETTERS:
                     continue
-                nxt = part[i + 1:i + 2]
+                nxt = part[i + 1 : i + 2]
                 if ch in self.MICRO and nxt.isalpha():
                     continue  # unit prefix: µF, µH, µs, ...
                 self.result.add_warning(
                     f"{location}: Found plain Unicode Greek letter '{ch}'. "
-                    f"Use KaTeX: $\\{self.GREEK_LETTERS[ch]}$")
+                    f"Use KaTeX: $\\{self.GREEK_LETTERS[ch]}$"
+                )
                 self.stats['greek_letters_found'] += 1
                 has_math = True
 
@@ -355,28 +391,33 @@ class QuestionValidator:
                     continue
                 self.result.add_warning(
                     f"{location}: Found formula division '{num}/{den}'. "
-                    f"Use KaTeX: $\\dfrac{{{num}}}{{{den}}}$")
+                    f"Use KaTeX: $\\dfrac{{{num}}}{{{den}}}$"
+                )
                 has_math = True
 
         katex_parts = re.findall(r'\$([^$]+)\$', text)
         for katex in katex_parts:
             if re.search(r'\\frac\b', katex):  # \dfrac does not match
                 self.result.add_warning(
-                    f"{location}: Use \\dfrac instead of \\frac for proper display-size fractions")
+                    f"{location}: Use \\dfrac instead of \\frac for proper display-size fractions"
+                )
             for cmd in self.LATEX_COMMANDS:
                 if re.search(r'(?<!\\)\b' + re.escape(cmd) + r'\b', katex):
                     self.result.add_error(
                         f"{location}: LaTeX command '{cmd}' appears without backslash. "
-                        f"Use \\\\{cmd} in JSON")
+                        f"Use \\\\{cmd} in JSON"
+                    )
 
         if re.search(r'\$\\mu\$[A-Za-zΩ]', text):
             self.result.add_warning(
-                f"{location}: Found $\\mu$ in unit context. Use plain µ for units (µF, µH, µV, µA)")
+                f"{location}: Found $\\mu$ in unit context. Use plain µ for units (µF, µH, µV, µA)"
+            )
 
         if re.search(r'\$\\dfrac\{1\}.*?(second|секунда|hour|minute)\}', text, re.IGNORECASE):
             self.result.add_warning(
                 f"{location}: Unit expression wrapped in KaTeX. "
-                f"Keep unit labels as plain text (e.g., '1/second')")
+                "Keep unit labels as plain text (e.g., '1/second')"
+            )
 
         return has_math, bool(katex_parts)
 
@@ -396,7 +437,8 @@ class QuestionValidator:
             print()
 
         if self.result.warnings:
-            print(f"{Colors.YELLOW}{Colors.BOLD}⚠ WARNINGS ({len(self.result.warnings)}):{Colors.RESET}")
+            count = len(self.result.warnings)
+            print(f"{Colors.YELLOW}{Colors.BOLD}⚠ WARNINGS ({count}):{Colors.RESET}")
             for warning in self.result.warnings:
                 print(f"  {Colors.YELLOW}⚠ {warning}{Colors.RESET}")
             print()
@@ -429,17 +471,17 @@ class QuestionValidator:
         print()
 
 
-def main():
+def main(argv=None):
     """Main entry point"""
-    if len(sys.argv) < 2:
-        print(f"{Colors.BOLD}Usage:{Colors.RESET} python3 validate.py <json_file> [json_file ...]")
+    files = sys.argv[1:] if argv is None else list(argv)
+    if not files:
+        print(f"{Colors.BOLD}Usage:{Colors.RESET} lzradio-validate <json_file> [json_file ...]")
         print("\nValidates Bulgarian Amateur Radio Exam question JSON files.")
         print("\nExamples:")
-        print("  python3 validate.py examples/simple_no_math.json")
-        print("  python3 validate.py examples/*.json")
+        print("  lzradio-validate examples/simple_no_math.json")
+        print("  lzradio-validate examples/*.json")
         sys.exit(1)
 
-    files = sys.argv[1:]
     total_errors = 0
     total_warnings = 0
 

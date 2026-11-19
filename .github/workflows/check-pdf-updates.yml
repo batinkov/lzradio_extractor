@@ -21,6 +21,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      # Install first, so a uv failure fails the run instead of being
+      # mistaken for an exit code of the checker below.
+      - name: Install project
+        run: uv sync --locked --no-dev
+
       # Exit codes: 0 = up to date, 1 = update available, 2 = check failed.
       # A failed check fails the run, so GitHub emails a failure notification.
       - name: Check for PDF updates
@@ -29,7 +37,7 @@ jobs:
           NO_COLOR: '1'
         run: |
           set +e
-          python3 check_for_updates.py | tee report.txt
+          uv run --no-sync lzradio-check-updates | tee report.txt
           code=${PIPESTATUS[0]}
           echo "code=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then

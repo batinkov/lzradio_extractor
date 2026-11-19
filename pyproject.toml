@@ -1,0 +1,55 @@
+[project]
+name = "lzradio-extractor"
+version = "0.1.0"
+description = "Tools for extracting Bulgarian amateur radio exam questions from official CRC PDFs into JSON"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = []  # standard library only
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Natural Language :: Bulgarian",
+    "Topic :: Communications :: Ham Radio",
+]
+
+[project.urls]
+Repository = "https://github.com/batinkov/lzradio_extractor"
+Application = "https://github.com/batinkov/lzradio"
+
+[project.scripts]
+lzradio-validate = "lzradio_extractor.validate:main"
+lzradio-check-updates = "lzradio_extractor.check_updates:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+
+[tool.ruff.format]
+quote-style = "preserve"

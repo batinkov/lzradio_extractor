@@ -8,12 +8,19 @@ class pages ("Радиолюбителски клас 1/2") and identifies each 
 text ("Раздел N"). Every PDF is downloaded to downloads/ and compared by
 SHA256 with the local copy in source_pdfs/class_X_razdel_Y.pdf.
 
+Both directories are resolved relative to the repository root, which is the
+current directory unless --root is given.
+
+Usage:
+    lzradio-check-updates [--root DIR]
+
 Exit codes:
     0  all files up to date
     1  at least one file differs from (or is missing in) source_pdfs/
     2  the check could not be completed (network error, site layout changed, ...)
 """
 
+import argparse
 import hashlib
 import os
 import re
@@ -21,7 +28,7 @@ import sys
 import traceback
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
@@ -35,9 +42,8 @@ TIMEOUT = 30
 CLASSES = (1, 2)
 SECTIONS = (1, 2, 3)
 
-ROOT = Path(__file__).resolve().parent
-SOURCE_DIR = ROOT / "source_pdfs"
-DOWNLOAD_DIR = ROOT / "downloads"
+SOURCE_DIR_NAME = "source_pdfs"
+DOWNLOAD_DIR_NAME = "downloads"
 
 EXIT_UP_TO_DATE = 0
 EXIT_UPDATED = 1
@@ -50,6 +56,7 @@ def _use_color() -> bool:
 
 class Colors:
     """ANSI color codes; empty when output is not a terminal or NO_COLOR is set."""
+
     _on = _use_color()
     RED = '\033[91m' if _on else ''
     YELLOW = '\033[93m' if _on else ''
@@ -73,8 +80,11 @@ class LinkParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag == 'a':
             attrs = dict(attrs)
-            self._current = {'href': attrs.get('href') or '',
-                             'title': attrs.get('title') or '', 'text': []}
+            self._current = {
+                'href': attrs.get('href') or '',
+                'title': attrs.get('title') or '',
+                'text': [],
+            }
 
     def handle_data(self, data):
         if self._current is not None:
@@ -94,7 +104,7 @@ def fetch(url: str) -> bytes:
             return response.read()
     except HTTPError as e:
         raise CheckError(f"HTTP {e.code} {e.reason}: {url}") from e
-    except (URLError, TimeoutError, OSError) as e:
+    except OSError as e:  # URLError and TimeoutError are OSError subclasses
         reason = getattr(e, 'reason', e)
         raise CheckError(f"Cannot fetch {url}: {reason}") from e
 
@@ -103,8 +113,7 @@ def get_links(url: str):
     """Return absolute (href, label) pairs for all links on a page."""
     parser = LinkParser()
     parser.feed(fetch(url).decode('utf-8', errors='replace'))
-    return [(urljoin(url, href), f"{text} {title}")
-            for href, text, title in parser.links if href]
+    return [(urljoin(url, href), f"{text} {title}") for href, text, title in parser.links if href]
 
 
 def find_class_pages() -> dict:
@@ -117,7 +126,8 @@ def find_class_pages() -> dict:
     missing = [c for c in CLASSES if c not in pages]
     if missing:
         raise CheckError(
-            f"Class page(s) {missing} not found on {INDEX_URL} - did the site layout change?")
+            f"Class page(s) {missing} not found on {INDEX_URL} - did the site layout change?"
+        )
     return pages
 
 
@@ -137,7 +147,8 @@ def find_section_pdfs(class_url: str) -> dict:
     if sorted(pdfs) != list(SECTIONS):
         raise CheckError(
             f"Expected PDFs for sections {list(SECTIONS)} on {class_url}, "
-            f"found {sorted(pdfs)} - did the site layout change?")
+            f"found {sorted(pdfs)} - did the site layout change?"
+        )
     return pdfs
 
 
@@ -145,11 +156,16 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def check_updates() -> int:
+def check_updates(root: Path) -> int:
+    source_dir = root / SOURCE_DIR_NAME
+    download_dir = root / DOWNLOAD_DIR_NAME
+    if not source_dir.is_dir():
+        raise CheckError(f"{source_dir} not found - run from the repository root or pass --root")
+
     print(f"\n{Colors.BOLD}Checking for updates to CRC PDF files{Colors.RESET}")
     print("=" * 70)
     print(f"Index:  {INDEX_URL}")
-    print(f"Local:  {SOURCE_DIR.relative_to(ROOT)}/")
+    print(f"Local:  {source_dir}/")
     print()
 
     remote = {}  # local filename -> PDF URL
@@ -157,7 +173,7 @@ def check_updates() -> int:
         for section, pdf_url in sorted(find_section_pdfs(class_url).items()):
             remote[f"class_{cls}_razdel_{section}.pdf"] = pdf_url
 
-    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    download_dir.mkdir(exist_ok=True)
     identical, updated, missing = [], [], []
 
     for name, url in remote.items():
@@ -166,10 +182,10 @@ def check_updates() -> int:
         data = fetch(url)
         if not data.startswith(b'%PDF'):
             raise CheckError(f"{url} is not a PDF")
-        (DOWNLOAD_DIR / name).write_bytes(data)
+        (download_dir / name).write_bytes(data)
         remote_hash = sha256(data)
 
-        local = SOURCE_DIR / name
+        local = source_dir / name
         if not local.exists():
             print(f"  {Colors.YELLOW}⚠ Not found locally{Colors.RESET}")
             missing.append(name)
@@ -188,7 +204,7 @@ def check_updates() -> int:
             print(f"  • {name} (changed)")
         for name in missing:
             print(f"  • {name} (missing locally)")
-        print(f"\nNew versions saved in {DOWNLOAD_DIR.relative_to(ROOT)}/")
+        print(f"\nNew versions saved in {download_dir}/")
         return EXIT_UPDATED
 
     print(f"{Colors.GREEN}{Colors.BOLD}✅ ALL FILES UP TO DATE{Colors.RESET}")
@@ -196,9 +212,24 @@ def check_updates() -> int:
     return EXIT_UP_TO_DATE
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Check the CRC website for updated amateur radio exam PDFs.",
+        epilog="Exit codes: 0 up to date, 1 update available, 2 check failed.",
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path.cwd(),
+        help="repository root containing source_pdfs/ (default: current directory)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
     try:
-        sys.exit(check_updates())
+        sys.exit(check_updates(args.root.resolve()))
     except CheckError as e:
         print(f"\n{Colors.RED}{Colors.BOLD}✗ CHECK FAILED:{Colors.RESET} {e}")
         sys.exit(EXIT_ERROR)

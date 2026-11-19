@@ -13,16 +13,23 @@ This repository contains tools to:
 ## Quick Start
 
 ### Prerequisites
-- Python 3.8 or higher
+- [uv](https://docs.astral.sh/uv/) (installs a suitable Python automatically)
+- Python 3.11 or higher - the tools themselves use only the standard library
 - Internet connection (for PDF update checks)
 - Access to Claude or another LLM for PDF extraction
+
+### Setup
+
+```bash
+uv sync
+```
 
 ### Check for PDF Updates
 
 Before extracting, check if CRC has published updated versions:
 
 ```bash
-python3 check_for_updates.py
+uv run lzradio-check-updates
 ```
 
 This follows the links on the CRC exam page to find the current PDFs (CRC renames them from time to time), downloads them to `downloads/` and compares them with your local copies.
@@ -43,7 +50,7 @@ Exit codes: `0` up to date, `1` update available, `2` check failed (network erro
 After extracting questions, validate the JSON file:
 
 ```bash
-python3 validate.py extracted_json/Class1_Section1.json
+uv run lzradio-validate extracted_json/Class1_Section1.json
 ```
 
 The validator checks:
@@ -68,9 +75,12 @@ lzradio_extractor/
 │   ├── simple_no_math.json
 │   └── complex_with_katex.json
 ├── template.json             # JSON structure template
-├── validate.py               # Validation script
-├── tests/                    # Unit tests (python3 -m unittest discover -s tests)
-├── check_for_updates.py      # Check for PDF updates
+├── src/lzradio_extractor/
+│   ├── validate.py           # JSON validator (lzradio-validate)
+│   └── check_updates.py      # CRC update checker (lzradio-check-updates)
+├── tests/                    # pytest tests
+├── pyproject.toml            # Project metadata, dev dependencies, tool config
+├── uv.lock                   # Locked dev dependencies
 ├── CLAUDE.md                 # Detailed extraction guide (for LLMs)
 └── README.md                 # This file
 ```
@@ -88,13 +98,13 @@ lzradio_extractor/
 
 ### Tools
 
-**`check_for_updates.py`**
+**`lzradio-check-updates`** (`src/lzradio_extractor/check_updates.py`)
 - Finds the current PDFs by following links from the CRC exam page (no hardcoded file URLs)
 - Downloads them to `downloads/` and compares with local files using SHA256 hashes
 - Exit codes: 0 up to date, 1 update available, 2 check failed
 - Reports which files have been updated
 
-**`validate.py`**
+**`lzradio-validate`** (`src/lzradio_extractor/validate.py`)
 - Validates JSON structure and content
 - Checks KaTeX formatting for mathematical notation
 - Handles image-based questions
@@ -122,7 +132,7 @@ lzradio_extractor/
 
 1. **Check for Updates**
    ```bash
-   python3 check_for_updates.py
+   uv run lzradio-check-updates
    ```
 
 2. **Extract Questions**
@@ -133,7 +143,7 @@ lzradio_extractor/
 
 3. **Validate**
    ```bash
-   python3 validate.py extracted_json/YourFile.json
+   uv run lzradio-validate extracted_json/YourFile.json
    ```
 
 4. **Fix Issues**
@@ -185,13 +195,16 @@ Some questions show answer choices as diagrams, circuits, or symbols in images:
 
 The validator accepts empty choice text when an `image` field is present.
 
-## Running Tests
-
-The tests use only the Python standard library:
+## Development
 
 ```bash
-python3 -m unittest discover -s tests -v
+uv sync                 # create .venv with dev tools (pytest, ruff)
+uv run pytest           # run tests
+uv run ruff check       # lint
+uv run ruff format      # format
 ```
+
+CI runs the same checks on every push and pull request (`.github/workflows/tests.yml`).
 
 ## Contributing
 
