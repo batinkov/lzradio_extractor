@@ -111,10 +111,9 @@ lzradio_extractor/
 - Provides detailed error and warning reports
 
 **`template.json`**
-- Complete JSON structure example
-- Shows all required fields
-- Includes KaTeX formatting examples
-- Demonstrates image-based questions
+- Minimal JSON skeleton with all required fields
+- One text question and one image-based question
+- For KaTeX formatting see `examples/complex_with_katex.json`
 
 ### Documentation
 

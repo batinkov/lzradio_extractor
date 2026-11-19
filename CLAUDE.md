@@ -32,7 +32,7 @@ lzradio_extractor/
 ├── examples/                 # Reference examples
 │   ├── simple_no_math.json   # Questions without mathematical content
 │   └── complex_with_katex.json  # Questions with KaTeX formatting
-├── template.json             # JSON structure template with examples
+├── template.json             # Minimal JSON structure template
 ├── src/lzradio_extractor/
 │   ├── validate.py           # JSON validator (lzradio-validate)
 │   └── check_updates.py      # CRC update checker (lzradio-check-updates)
@@ -80,8 +80,6 @@ If updates are detected, manually review the changes in `downloads/` and decide 
 Before extracting questions, review the JSON structure in `template.json`. This file shows:
 - Required top-level fields: `class`, `section`, `update`, `questions`
 - Question structure with 4 multiple-choice answers
-- KaTeX formatting examples
-- Common patterns for mathematical notation
 - Image-based questions (where choices are shown in an image, not as text)
 
 See `examples/` directory for complete working examples:
