@@ -82,7 +82,7 @@ jobs:
             echo "- Source: https://crc.bg/bg/rubriki/143/testove-za-provejdane-na-izpiti-za-pravosposobnost-na-radiolubiteli"
             echo
             echo "Next steps: review the new PDFs, copy them to \`source_pdfs/\`,"
-            echo "re-extract the affected questions (see CLAUDE.md) and close this issue."
+            echo "re-extract the affected questions (see docs/extraction-guide.md) and close this issue."
             echo
             echo '```'
             cat report.txt
