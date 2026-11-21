@@ -46,6 +46,38 @@ See `template.json` for the skeleton and `examples/` for real questions:
 - Questions are numbered from 1 without gaps, in PDF order.
 - Choice keys are the Cyrillic letters А, Б, В, Г, in that order. `correct_answer` is one of them.
 
+### Reading the PDFs
+
+In the PDF, each question ends with its correct answer in parentheses:
+
+```
+1. На колко мегахерца (MHz) са равни 144432 килохерца (kHz)? (Б)
+ А. На 0,144432 MHz;
+ Б. На 144,432 MHz;
+ В.  На  144432000  MHz;
+ Г. На 0,000144432 MHz.
+```
+
+becomes
+
+```json
+{
+    "question_number": 1,
+    "question_body": "На колко мегахерца (MHz) са равни 144432 килохерца (kHz)?",
+    "correct_answer": "Б",
+    "choices": [
+        {"key": "А", "text": "На 0,144432 MHz"},
+        {"key": "Б", "text": "На 144,432 MHz"},
+        {"key": "В", "text": "На 144432000 MHz"},
+        {"key": "Г", "text": "На 0,000144432 MHz"}
+    ]
+}
+```
+
+- The answer marker `(Б)` moves to `correct_answer` and is removed from the question text.
+- The choice labels (`А.`) and the trailing `;` or `.` are dropped.
+- Repeated spaces are collapsed into one.
+
 ### Image-based questions
 
 Some questions show the answer choices as diagrams, circuits or symbols. For these:
@@ -71,16 +103,32 @@ Some questions show the answer choices as diagrams, circuits or symbols. For the
 
 ```
 Extract all questions from the attached Bulgarian amateur radio exam PDF
-into JSON, following docs/extraction-guide.md and template.json exactly.
+into JSON. Follow docs/extraction-guide.md and template.json exactly.
 
-- Keep the original Bulgarian text; do not fix or rephrase it.
-- Every question has 4 choices: А, Б, В, Г.
-- Apply the KaTeX rules from the guide (Greek letters always in KaTeX,
-  units as plain text).
-- For questions whose choices are shown in an image, add the "image"
-  field and leave the choice texts empty.
+Reading the PDF:
+- The heading gives "class", "section" and "update"; copy them verbatim.
+- Each question ends with the correct answer in parentheses, e.g. "(Б)".
+  Put that letter in "correct_answer" and remove it from "question_body".
+- Choices are labelled А., Б., В., Г. Drop the label and the trailing
+  ";" or "." from each choice text. Collapse repeated spaces.
 
-Save the result to extracted_json/Class<X>_Section<Y>.json
+Content:
+- Keep the original Bulgarian wording; do not fix, translate or rephrase it.
+- Apply the KaTeX rules from the guide: Greek letters always in KaTeX,
+  units (µF, MHz, kΩ) as plain text, formulas with \dfrac.
+- If the choices are shown as a picture, add the "image" field and leave
+  the choice texts empty.
+- Never guess. If something is unreadable, keep your best reading and
+  list it in the report below.
+
+Output:
+- Extract every question. If the output is too long, continue in further
+  replies until done; never summarize or skip questions.
+- Save the JSON to extracted_json/Class<X>_Section<Y>.json. No comments
+  or markdown in the file.
+- Afterwards, report: the number of questions (must equal the last
+  question number in the PDF), the image-based question numbers, and
+  anything you were unsure about.
 ```
 
 ## KaTeX Formatting Rules
@@ -134,6 +182,11 @@ Errors (exit code 1) must be fixed. Warnings point to likely formatting problems
   ⚠ Question 5 body: Found plain Unicode Greek letter 'λ'. Use KaTeX: $\lambda$
   ⚠ Question 12, Choice 3: Found formula division 'R/C'. Use KaTeX: $\dfrac{R}{C}$
 ```
+
+The validator checks the format, not the content. It cannot tell whether a question was transcribed correctly or the right answer was picked. Before transferring, compare against the PDF:
+- the number of questions with the last question number in the PDF
+- the `correct_answer` of a sample of questions (e.g. every tenth)
+- every question the LLM reported as uncertain
 
 ## Transfer to LZ Radio
 
