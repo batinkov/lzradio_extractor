@@ -283,11 +283,19 @@ def test_numbers_sequential():
 
 
 def test_numbers_out_of_order():
-    assert has(warnings(document(question(2), question(1))), "not in sequential order")
+    found = warnings(document(question(1), question(3), question(2)))
+    assert has(found, "not in ascending order: 2 comes after 3")
+    assert not has(found, "Missing")
 
 
 def test_numbers_gap():
-    assert has(warnings(document(question(1), question(3))), "not sequential")
+    found = warnings(document(question(1), question(2), question(4), question(6)))
+    assert has(found, "Missing question numbers: [3, 5]")
+    assert not has(found, "ascending")
+
+
+def test_numbers_not_starting_at_one():
+    assert has(warnings(document(question(2), question(3))), "Missing question numbers: [1]")
 
 
 def test_numbers_duplicate():

@@ -17,6 +17,7 @@ import os
 import re
 import sys
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -327,11 +328,18 @@ class QuestionValidator:
         duplicates = sorted(n for n, c in Counter(numbers).items() if c > 1)
         if duplicates:
             self.result.add_error(f"Duplicate question numbers: {duplicates}")
-        elif sorted(numbers) == expected:
-            self.result.add_warning(f"Question numbers are not in sequential order. Got: {numbers}")
-        else:
+            return
+        unordered = [(a, b) for a, b in pairwise(numbers) if b < a]
+        if unordered:
+            a, b = unordered[0]
             self.result.add_warning(
-                f"Question numbers are not sequential. Expected 1-{len(numbers)}, got: {numbers}"
+                f"Question numbers are not in ascending order: {b} comes after {a}"
+            )
+        # The CRC PDFs themselves skip numbers sometimes, so a gap is only a warning
+        missing = sorted(set(range(1, max(numbers) + 1)) - set(numbers))
+        if missing:
+            self.result.add_warning(
+                f"Missing question numbers: {missing} - check that the PDF skips them too"
             )
 
     # ------------------------------------------------------------------

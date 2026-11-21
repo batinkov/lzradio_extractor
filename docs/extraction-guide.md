@@ -2,6 +2,12 @@
 
 How to extract the questions from the CRC PDFs in `source_pdfs/` into JSON for [LZ Radio](https://github.com/batinkov/lzradio). It is written for both humans and the LLM doing the extraction: give the LLM this file together with the PDF.
 
+The process has two LLM passes:
+
+1. [**Pass 1: Extract**](#pass-1-extract) every question by the rules below, then [validate](#validate).
+2. [**Pass 2: Check for PDF quirks**](#pass-2-check-for-pdf-quirks): compare the JSON with the PDF and fix the known exceptions, then validate again.
+3. [**Human check**](#human-check) and [**transfer to LZ Radio**](#transfer-to-lz-radio).
+
 ## Source PDFs
 
 | File | Class | Section |
@@ -43,7 +49,7 @@ See `template.json` for the skeleton and `examples/` for real questions:
 ```
 
 - `class`, `section` and `update` are copied from the PDF heading.
-- Questions are numbered from 1 without gaps, in PDF order.
+- `question_number` is the number printed in the PDF. Never renumber: the PDFs have gaps (e.g. Class 1 Section 3 has no question 31), and the numbers must match the official PDF.
 - Choice keys are the Cyrillic letters А, Б, В, Г, in that order. `correct_answer` is one of them.
 
 ### Reading the PDFs
@@ -99,38 +105,6 @@ Some questions show the answer choices as diagrams, circuits or symbols. For the
 }
 ```
 
-## LLM Prompt
-
-```
-Extract all questions from the attached Bulgarian amateur radio exam PDF
-into JSON. Follow docs/extraction-guide.md and template.json exactly.
-
-Reading the PDF:
-- The heading gives "class", "section" and "update"; copy them verbatim.
-- Each question ends with the correct answer in parentheses, e.g. "(Б)".
-  Put that letter in "correct_answer" and remove it from "question_body".
-- Choices are labelled А., Б., В., Г. Drop the label and the trailing
-  ";" or "." from each choice text. Collapse repeated spaces.
-
-Content:
-- Keep the original Bulgarian wording; do not fix, translate or rephrase it.
-- Apply the KaTeX rules from the guide: Greek letters always in KaTeX,
-  units (µF, MHz, kΩ) as plain text, formulas with \dfrac.
-- If the choices are shown as a picture, add the "image" field and leave
-  the choice texts empty.
-- Never guess. If something is unreadable, keep your best reading and
-  list it in the report below.
-
-Output:
-- Extract every question. If the output is too long, continue in further
-  replies until done; never summarize or skip questions.
-- Save the JSON to extracted_json/Class<X>_Section<Y>.json. No comments
-  or markdown in the file.
-- Afterwards, report: the number of questions (must equal the last
-  question number in the PDF), the image-based question numbers, and
-  anything you were unsure about.
-```
-
 ## KaTeX Formatting Rules
 
 LZ Radio renders text between `$...$` with [KaTeX](https://katex.org/docs/supported.html). In JSON, backslashes are escaped: `$\lambda$` is written `"$\\lambda$"`.
@@ -169,6 +143,48 @@ Unit abbreviations stay plain, including those with µ and Ω:
 
 µ as a variable in a formula (e.g. relative permeability) is KaTeX: `$\mu_r = 1$`.
 
+## Pass 1: Extract
+
+Two rules cannot be fixed later and apply already here:
+- **Read the rendered pages, not the PDF's text layer.** The PDFs draw Greek letters and µ with a symbol font that is missing from copied or extracted text.
+- **Keep the question numbers from the PDF**, including gaps.
+
+Prompt:
+
+```
+Extract all questions from the attached Bulgarian amateur radio exam PDF
+into JSON. Follow docs/extraction-guide.md and template.json exactly.
+
+Reading the PDF:
+- Read the rendered pages, not the text layer: Greek letters and µ are
+  missing from the PDF's text.
+- The heading gives "class", "section" and "update"; copy them verbatim.
+- Each question ends with the correct answer in parentheses, e.g. "(Б)".
+  Put that letter in "correct_answer" and remove it from "question_body".
+- Choices are labelled А., Б., В., Г. Drop the label and the trailing
+  ";" or "." from each choice text. Collapse repeated spaces.
+- Use the question numbers printed in the PDF. Never renumber, even if
+  a number is missing.
+
+Content:
+- Keep the original Bulgarian wording; do not fix, translate or rephrase it.
+- Apply the KaTeX rules from the guide: Greek letters always in KaTeX,
+  units (µF, MHz, kΩ) as plain text, formulas with \dfrac.
+- If the choices are shown as a picture, add the "image" field and leave
+  the choice texts empty.
+- Never guess. If something is unreadable, keep your best reading and
+  list it in the report below.
+
+Output:
+- Extract every question. If the output is too long, continue in further
+  replies until done; never summarize or skip questions.
+- Save the JSON to extracted_json/Class<X>_Section<Y>.json. No comments
+  or markdown in the file.
+- Afterwards, report: the number of questions, the first and last
+  question number, any missing numbers, the image-based question
+  numbers, and anything you were unsure about.
+```
+
 ## Validate
 
 ```bash
@@ -183,8 +199,40 @@ Errors (exit code 1) must be fixed. Warnings point to likely formatting problems
   ⚠ Question 12, Choice 3: Found formula division 'R/C'. Use KaTeX: $\dfrac{R}{C}$
 ```
 
+A warning about missing question numbers is expected when the PDF itself has a gap. Check that the PDF really skips that number.
+
+## Pass 2: Check for PDF quirks
+
+The CRC PDFs have known irregularities that a first pass easily gets wrong. Give the LLM the PDF and the JSON from pass 1 and let it check every question for these:
+
+| Quirk | In the PDF | In the JSON |
+|-------|-----------|-------------|
+| Symbol font | `параметърът  (бета)`, `Алфа ()`, `лентата на пропускане f`, `дължина 1/4;` – Greek letters and µ missing from the text | Use the letter from the page image, in KaTeX: `$\beta$`, `$\Delta f$`, `1/4 $\lambda$`; µ in units as plain `µ` |
+| Latin look-alike letters | `(A)`, `(B)`, `B. SSB;` – Latin A/B instead of Cyrillic А/В | Always Cyrillic А, Б, В, Г in `key` and `correct_answer` |
+| Parentheses that are not the answer | `разграфен в ампери (А), тече ток …` – here `(А)` is the ampere unit | Only the parenthesis at the very end of the question is the answer; keep the others in the text |
+| Numbering gaps | Class 1 Section 3: … 30, 32 … | Keep the gap; never renumber |
+| Degree sign | `90о` – Cyrillic letter о | `90°` |
+| Subscripts | `fp`, `Q/fp` in formulas | `$f_p$`, `$\dfrac{Q}{f_p}$` |
+| Quotes | `„…“` or `“…”` | Keep the quotes exactly as in the PDF; do not replace them with `"` or `'` |
+
+Prompt:
+
+```
+Attached are a Bulgarian amateur radio exam PDF and the JSON extracted
+from it. Compare every question in the JSON with the rendered PDF page
+and fix the PDF quirks listed in docs/extraction-guide.md under
+"Pass 2: Check for PDF quirks". Change nothing else.
+
+Report every change as: question number, field, old value, new value.
+```
+
+Validate again after pass 2.
+
+## Human check
+
 The validator checks the format, not the content. It cannot tell whether a question was transcribed correctly or the right answer was picked. Before transferring, compare against the PDF:
-- the number of questions with the last question number in the PDF
+- the question count and missing numbers reported in pass 1
+- the changes reported in pass 2
 - the `correct_answer` of a sample of questions (e.g. every tenth)
 - every question the LLM reported as uncertain
 
@@ -193,6 +241,6 @@ The validator checks the format, not the content. It cannot tell whether a quest
 All paths are in the [LZ Radio](https://github.com/batinkov/lzradio) repository.
 
 - [ ] Copy the JSON to `data_bg/exam/Class<X>_Section<Y>.json`.
-- [ ] Cut the images of image-based questions from the PDF, save them as PNG with the exact names from the JSON, and put them in `public/images/questions/bg/`.
+- [ ] Create the images of image-based questions and put them in `public/images/questions/bg/`, named exactly as in the JSON. The symbols in the PDFs are vector drawings, so they cannot be extracted as image files: render the page and crop it, e.g. `pdftoppm -png -r 300 -f 7 -l 7 source_pdfs/class_2_razdel_1.pdf page`.
 - [ ] Update the English translation in `data_en/exam/` (and `public/images/questions/en/` if needed) for every changed question.
 - [ ] Run the app (`npm run dev`) and check the changed sections: text, formulas, images and correct answers.
