@@ -2,7 +2,9 @@ name: Check CRC PDF Updates
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # 2 AM UTC daily (GitHub may start it a few hours late)
+    # 03:17 UTC daily. Off the full hour, where GitHub delays or drops
+    # scheduled runs most; it may still start a few hours late.
+    - cron: '17 3 * * *'
   workflow_dispatch:      # Manual trigger
 
 permissions:
