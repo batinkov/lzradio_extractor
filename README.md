@@ -27,7 +27,7 @@ uv run lzradio-validate extracted_json/Class2_Section1.json
 
 **`lzradio-check-updates`** follows the links on the CRC exam page to the current PDFs (CRC renames the files from time to time), downloads them to `downloads/` and compares them with `source_pdfs/`.
 Exit codes: `0` up to date, `1` update available, `2` check failed (network error or the CRC site layout changed).
-A [nightly workflow](.github/workflows/check-pdf-updates.yml) runs it and opens an issue when an update is found.
+A [nightly workflow](.github/workflows/crc-pdf-check.yml) runs it and opens an issue when an update is found.
 
 **`lzradio-validate`** checks extracted JSON files: structure and required fields, question numbering, answer keys, image names and KaTeX formatting.
 Exit codes: `0` valid (possibly with warnings), `1` errors found.

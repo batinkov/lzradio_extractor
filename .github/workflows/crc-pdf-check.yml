@@ -1,10 +1,9 @@
-name: Check CRC PDF Updates
+name: CRC PDF Check
 
 on:
   schedule:
-    # 03:17 UTC daily. Off the full hour, where GitHub delays or drops
-    # scheduled runs most; it may still start a few hours late.
-    - cron: '17 3 * * *'
+    # 03:00 UTC daily (GitHub may start it a few hours late).
+    - cron: '0 3 * * *'
   workflow_dispatch:      # Manual trigger
 
 permissions:
@@ -12,7 +11,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: check-pdf-updates
+  group: crc-pdf-check
   cancel-in-progress: false
 
 jobs:

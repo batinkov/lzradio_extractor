@@ -19,7 +19,7 @@ uv run lzradio-check-updates              # needs network access to crc.bg
 - `src/lzradio_extractor/check_updates.py` – finds the PDFs by following links from the CRC exam page and compares them with `source_pdfs/` by SHA256.
 - `src/lzradio_extractor/validate.py` – validates extracted JSON (structure, numbering, answer keys, image names, KaTeX).
 - `tests/` – pytest; `test_check_updates.py` fakes the CRC site, so tests never touch the network.
-- `.github/workflows/` – `tests.yml` (ruff + pytest on Python 3.11–3.14) and `check-pdf-updates.yml` (nightly check, opens an issue on update).
+- `.github/workflows/` – `tests.yml` (ruff + pytest on Python 3.11–3.14) and `crc-pdf-check.yml` (nightly check, opens an issue on update).
 
 ## Conventions
 
