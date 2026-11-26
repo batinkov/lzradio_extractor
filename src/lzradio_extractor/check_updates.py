@@ -25,6 +25,7 @@ import hashlib
 import os
 import re
 import sys
+import time
 import traceback
 from html.parser import HTMLParser
 from pathlib import Path
@@ -38,6 +39,9 @@ INDEX_URL = (
 )
 USER_AGENT = "lzradio-extractor (CRC exam PDF update check)"
 TIMEOUT = 30
+# Seconds to wait before each retry. crc.bg intermittently drops TLS connections
+# (about 1 in 6 requests in Nov 2026), and one check makes about 9 requests.
+RETRY_DELAYS = (5, 15, 30)
 
 CLASSES = (1, 2)
 SECTIONS = (1, 2, 3)
@@ -97,16 +101,37 @@ class LinkParser(HTMLParser):
             self._current = None
 
 
+def _is_retryable(e: OSError) -> bool:
+    if isinstance(e, HTTPError):
+        return e.code == 429 or e.code >= 500
+    return True  # connection, TLS and timeout errors
+
+
+def _describe(e: OSError, url: str) -> str:
+    if isinstance(e, HTTPError):
+        return f"HTTP {e.code} {e.reason}: {url}"
+    return f"Cannot fetch {url}: {getattr(e, 'reason', e)}"
+
+
 def fetch(url: str) -> bytes:
+    """Download url, retrying transient failures (see RETRY_DELAYS)."""
     req = Request(url, headers={'User-Agent': USER_AGENT})
-    try:
-        with urlopen(req, timeout=TIMEOUT) as response:
-            return response.read()
-    except HTTPError as e:
-        raise CheckError(f"HTTP {e.code} {e.reason}: {url}") from e
-    except OSError as e:  # URLError and TimeoutError are OSError subclasses
-        reason = getattr(e, 'reason', e)
-        raise CheckError(f"Cannot fetch {url}: {reason}") from e
+    attempts = len(RETRY_DELAYS) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(req, timeout=TIMEOUT) as response:
+                return response.read()
+        except OSError as e:  # HTTPError, URLError and TimeoutError are OSError subclasses
+            message = _describe(e, url)
+            if attempt == attempts or not _is_retryable(e):
+                raise CheckError(message) from e
+            delay = RETRY_DELAYS[attempt - 1]
+            print(
+                f"  attempt {attempt}/{attempts} failed ({message}); retrying in {delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def get_links(url: str):

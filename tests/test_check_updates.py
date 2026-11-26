@@ -273,10 +273,73 @@ def test_main_unexpected_error_exits_2(repo, monkeypatch, capsys):
     assert "simulated bug" in capsys.readouterr().err
 
 
-def test_fetch_wraps_network_errors(monkeypatch):
+@pytest.fixture
+def no_sleep(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(cu.time, "sleep", sleeps.append)
+    return sleeps
+
+
+class FakeResponse:
+    def __init__(self, data):
+        self.data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self.data
+
+
+def flaky_urlopen(errors, data=b"ok"):
+    """urlopen that raises each of errors in turn, then returns data."""
+    calls = []
+
+    def urlopen(req, timeout):
+        calls.append(req.full_url)
+        if len(calls) <= len(errors):
+            raise errors[len(calls) - 1]
+        return FakeResponse(data)
+
+    return urlopen, calls
+
+
+def http_error(code):
+    return cu.HTTPError("https://crc.bg/x", code, "Error", {}, None)
+
+
+def test_fetch_wraps_network_errors(monkeypatch, no_sleep):
     def fail(*args, **kwargs):
         raise OSError("connection refused")
 
     monkeypatch.setattr(cu, "urlopen", fail)
     with pytest.raises(cu.CheckError, match="connection refused"):
         cu.fetch("https://crc.bg/x")
+    assert no_sleep == list(cu.RETRY_DELAYS)
+
+
+def test_fetch_retries_transient_errors(monkeypatch, no_sleep):
+    urlopen, calls = flaky_urlopen([OSError("EOF"), TimeoutError("timed out"), http_error(503)])
+    monkeypatch.setattr(cu, "urlopen", urlopen)
+    assert cu.fetch("https://crc.bg/x") == b"ok"
+    assert len(calls) == 4
+    assert no_sleep == list(cu.RETRY_DELAYS)
+
+
+def test_fetch_does_not_retry_client_errors(monkeypatch, no_sleep):
+    urlopen, calls = flaky_urlopen([http_error(404)])
+    monkeypatch.setattr(cu, "urlopen", urlopen)
+    with pytest.raises(cu.CheckError, match="HTTP 404"):
+        cu.fetch("https://crc.bg/x")
+    assert len(calls) == 1
+    assert no_sleep == []
+
+
+def test_fetch_retries_rate_limit(monkeypatch, no_sleep):
+    urlopen, calls = flaky_urlopen([http_error(429)])
+    monkeypatch.setattr(cu, "urlopen", urlopen)
+    assert cu.fetch("https://crc.bg/x") == b"ok"
+    assert len(calls) == 2
